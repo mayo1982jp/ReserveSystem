@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, User, Phone, Mail, MapPin, CheckCircle, ArrowRight, Stethoscope, Heart, Shield, Star, Settings } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Mail, MapPin, CheckCircle, ArrowRight, Stethoscope, Heart, Shield, Star, Settings, LogIn } from 'lucide-react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import AuthModal from './components/AuthModal';
+import UserMenu from './components/UserMenu';
 import AdminDashboard from './components/AdminDashboard';
 
 interface BookingForm {
@@ -12,7 +15,7 @@ interface BookingForm {
   notes: string;
 }
 
-function App() {
+function AppContent() {
   const [bookingForm, setBookingForm] = useState<BookingForm>({
     name: '',
     phone: '',
@@ -25,6 +28,10 @@ function App() {
   
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
+
+  const { user, loading } = useAuth();
 
   const services = [
     {
@@ -73,7 +80,17 @@ function App() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) {
+      setAuthModalMode('signin');
+      setShowAuthModal(true);
+      return;
+    }
     setIsSubmitted(true);
+  };
+
+  const handleAuthRequired = (mode: 'signin' | 'signup') => {
+    setAuthModalMode(mode);
+    setShowAuthModal(true);
   };
 
   const isServiceComplete = bookingForm.service !== '';
@@ -117,6 +134,19 @@ function App() {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 bg-amber-700 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <Stethoscope className="w-6 h-6 text-white animate-pulse" />
+          </div>
+          <p className="text-amber-700">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-stone-50">
       {/* Header */}
@@ -147,6 +177,27 @@ function App() {
                 <a href="#services" className="text-amber-700 hover:text-amber-900 transition-colors">サービス</a>
                 <a href="#contact" className="text-amber-700 hover:text-amber-900 transition-colors">お問い合わせ</a>
               </div>
+              
+              {user ? (
+                <UserMenu />
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handleAuthRequired('signin')}
+                    className="text-amber-700 hover:text-amber-900 transition-colors p-2 rounded-lg hover:bg-amber-50 flex items-center space-x-1"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    <span className="hidden md:block text-sm">ログイン</span>
+                  </button>
+                  <button
+                    onClick={() => handleAuthRequired('signup')}
+                    className="bg-amber-700 text-white px-3 py-2 rounded-lg hover:bg-amber-800 transition-colors text-sm"
+                  >
+                    新規登録
+                  </button>
+                </div>
+              )}
+              
               <button
                 onClick={() => setShowAdmin(true)}
                 className="text-amber-700 hover:text-amber-900 transition-colors p-2"
@@ -164,6 +215,25 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-6">
             <p className="text-xl text-amber-700">3つのステップで簡単予約</p>
+            {!user && (
+              <p className="text-sm text-amber-600 mt-2">
+                予約にはログインが必要です。
+                <button
+                  onClick={() => handleAuthRequired('signup')}
+                  className="text-amber-700 hover:text-amber-900 underline ml-1"
+                >
+                  新規登録
+                </button>
+                または
+                <button
+                  onClick={() => handleAuthRequired('signin')}
+                  className="text-amber-700 hover:text-amber-900 underline ml-1"
+                >
+                  ログイン
+                </button>
+                してください。
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleSubmit}>
@@ -395,7 +465,7 @@ function App() {
                 disabled={!isFormComplete}
               >
                 <CheckCircle className="w-6 h-6" />
-                <span>予約を確定する</span>
+                <span>{user ? '予約を確定する' : 'ログインして予約する'}</span>
               </button>
               {!isFormComplete && (
                 <p className="text-stone-500 mt-3 text-sm">
@@ -527,7 +597,22 @@ function App() {
           <p>&copy; 2024 健康整骨院. All rights reserved.</p>
         </div>
       </section>
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        initialMode={authModalMode}
+      />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
