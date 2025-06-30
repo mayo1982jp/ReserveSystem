@@ -94,18 +94,6 @@ function AppContent() {
   };
 
   const handleAdminAccess = () => {
-    // Check if user is logged in and has the specific email
-    if (!user) {
-      setAuthModalMode('signin');
-      setShowAuthModal(true);
-      return;
-    }
-    
-    if (user.email !== 'mayo810246@gmail.com') {
-      alert('管理画面へのアクセス権限がありません。');
-      return;
-    }
-    
     setShowAdmin(true);
   };
 
@@ -214,13 +202,16 @@ function AppContent() {
                 </div>
               )}
               
-              <button
-                onClick={handleAdminAccess}
-                className="text-amber-700 hover:text-amber-900 transition-colors p-2"
-                title="管理画面"
-              >
-                <Settings className="w-5 h-5" />
-              </button>
+              {/* 管理者ボタン - mayo810246@gmail.com でログインしている時のみ表示 */}
+              {user && user.email === 'mayo810246@gmail.com' && (
+                <button
+                  onClick={handleAdminAccess}
+                  className="text-amber-700 hover:text-amber-900 transition-colors p-2"
+                  title="管理画面"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+              )}
             </div>
           </div>
         </div>
