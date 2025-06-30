@@ -176,12 +176,6 @@ function AppContent() {
             </div>
             
             <div className="flex items-center space-x-6">
-              <div className="hidden md:flex items-center space-x-6">
-                <a href="#booking" className="text-amber-700 hover:text-amber-900 transition-colors">予約</a>
-                <a href="#services" className="text-amber-700 hover:text-amber-900 transition-colors">サービス</a>
-                <a href="#contact" className="text-amber-700 hover:text-amber-900 transition-colors">お問い合わせ</a>
-              </div>
-              
               {user ? (
                 <UserMenu />
               ) : (
