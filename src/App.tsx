@@ -93,6 +93,22 @@ function AppContent() {
     setShowAuthModal(true);
   };
 
+  const handleAdminAccess = () => {
+    // Check if user is logged in and has the specific email
+    if (!user) {
+      setAuthModalMode('signin');
+      setShowAuthModal(true);
+      return;
+    }
+    
+    if (user.email !== 'mayo810246@gmail.com') {
+      alert('管理画面へのアクセス権限がありません。');
+      return;
+    }
+    
+    setShowAdmin(true);
+  };
+
   const isServiceComplete = bookingForm.service !== '';
   const isDateTimeComplete = bookingForm.date !== '' && bookingForm.time !== '';
   const isPersonalComplete = bookingForm.name !== '' && bookingForm.phone !== '' && bookingForm.email !== '';
@@ -101,6 +117,19 @@ function AppContent() {
   // 管理画面を表示
   if (showAdmin) {
     return <AdminDashboard onBackToPublic={() => setShowAdmin(false)} />;
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 bg-amber-700 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <Stethoscope className="w-6 h-6 text-white animate-pulse" />
+          </div>
+          <p className="text-amber-700">読み込み中...</p>
+        </div>
+      </div>
+    );
   }
 
   if (isSubmitted) {
@@ -129,19 +158,6 @@ function AppContent() {
           >
             新しい予約をする
           </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 bg-amber-700 rounded-lg flex items-center justify-center mx-auto mb-4">
-            <Stethoscope className="w-6 h-6 text-white animate-pulse" />
-          </div>
-          <p className="text-amber-700">読み込み中...</p>
         </div>
       </div>
     );
@@ -199,7 +215,7 @@ function AppContent() {
               )}
               
               <button
-                onClick={() => setShowAdmin(true)}
+                onClick={handleAdminAccess}
                 className="text-amber-700 hover:text-amber-900 transition-colors p-2"
                 title="管理画面"
               >
