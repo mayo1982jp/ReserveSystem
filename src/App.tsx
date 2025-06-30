@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { Calendar, Clock, User, Phone, Mail, MapPin, CheckCircle, ArrowRight, Stethoscope, Heart, Shield, Star, Settings, LogIn } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Clock, User, Phone, Mail, MapPin, CheckCircle, ArrowRight, Stethoscope, Heart, Shield, Star, Settings, LogIn, AlertCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthModal from './components/AuthModal';
 import UserMenu from './components/UserMenu';
 import AdminDashboard from './components/AdminDashboard';
+import { getServices, createBooking, getProfile, updateProfile, checkBookingConflict, Service } from './lib/database';
 
 interface BookingForm {
   name: string;
@@ -30,43 +31,11 @@ function AppContent() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const { user, loading } = useAuth();
-
-  const services = [
-    {
-      id: 'general',
-      name: '一般整骨治療',
-      nameEn: 'General Treatment',
-      duration: '30分',
-      price: '¥3,000',
-      description: '肩こり、腰痛、関節痛の基本治療'
-    },
-    {
-      id: 'sports',
-      name: 'スポーツ整骨',
-      nameEn: 'Sports Therapy',
-      duration: '45分',
-      price: '¥4,500',
-      description: 'スポーツ外傷・障害の専門治療'
-    },
-    {
-      id: 'massage',
-      name: 'マッサージ治療',
-      nameEn: 'Therapeutic Massage',
-      duration: '60分',
-      price: '¥5,000',
-      description: '筋肉の緊張緩和とリラクゼーション'
-    },
-    {
-      id: 'acupuncture',
-      name: '鍼灸治療',
-      nameEn: 'Acupuncture',
-      duration: '45分',
-      price: '¥4,000',
-      description: '東洋医学による痛みの根本治療'
-    }
-  ];
+  const { user, loading: authLoading } = useAuth();
 
   const timeSlots = [
     '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
@@ -74,18 +43,95 @@ function AppContent() {
     '17:00', '17:30', '18:00', '18:30'
   ];
 
+  // サービス一覧を取得
+  useEffect(() => {
+    const fetchServices = async () => {
+      const servicesData = await getServices();
+      setServices(servicesData);
+    };
+    fetchServices();
+  }, []);
+
+  // ユーザー情報を取得してフォームに設定
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (user) {
+        const profile = await getProfile(user.id);
+        if (profile) {
+          setBookingForm(prev => ({
+            ...prev,
+            name: profile.name || '',
+            phone: profile.phone || '',
+            email: user.email || ''
+          }));
+        } else {
+          // プロフィールが存在しない場合、メールアドレスのみ設定
+          setBookingForm(prev => ({
+            ...prev,
+            email: user.email || ''
+          }));
+        }
+      }
+    };
+
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user]);
+
   const handleInputChange = (field: keyof BookingForm, value: string) => {
     setBookingForm(prev => ({ ...prev, [field]: value }));
+    setError(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!user) {
       setAuthModalMode('signin');
       setShowAuthModal(true);
       return;
     }
-    setIsSubmitted(true);
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // 予約の重複チェック
+      const hasConflict = await checkBookingConflict(bookingForm.date, bookingForm.time);
+      if (hasConflict) {
+        setError('選択された日時は既に予約が入っています。別の時間をお選びください。');
+        setLoading(false);
+        return;
+      }
+
+      // プロフィール情報を更新
+      if (bookingForm.name || bookingForm.phone) {
+        await updateProfile(user.id, {
+          name: bookingForm.name,
+          phone: bookingForm.phone
+        });
+      }
+
+      // 予約を作成
+      const booking = await createBooking({
+        service_id: bookingForm.service,
+        booking_date: bookingForm.date,
+        booking_time: bookingForm.time,
+        notes: bookingForm.notes || undefined
+      });
+
+      if (booking) {
+        setIsSubmitted(true);
+      } else {
+        setError('予約の作成に失敗しました。もう一度お試しください。');
+      }
+    } catch (error) {
+      console.error('Booking error:', error);
+      setError('予約の作成中にエラーが発生しました。');
+    }
+
+    setLoading(false);
   };
 
   const handleAuthRequired = (mode: 'signin' | 'signup') => {
@@ -107,7 +153,7 @@ function AppContent() {
     return <AdminDashboard onBackToPublic={() => setShowAdmin(false)} />;
   }
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center">
         <div className="text-center">
@@ -121,6 +167,8 @@ function AppContent() {
   }
 
   if (isSubmitted) {
+    const selectedService = services.find(s => s.id === bookingForm.service);
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
@@ -134,10 +182,10 @@ function AppContent() {
           <div className="bg-amber-50 rounded-lg p-4 mb-6 text-left">
             <h3 className="font-semibold mb-2 text-amber-900">予約詳細</h3>
             <div className="space-y-1 text-sm text-amber-700">
-              <p><span className="font-medium">治療:</span> {services.find(s => s.id === bookingForm.service)?.name}</p>
+              <p><span className="font-medium">治療:</span> {selectedService?.name}</p>
               <p><span className="font-medium">日時:</span> {bookingForm.date} {bookingForm.time}</p>
               <p><span className="font-medium">お名前:</span> {bookingForm.name}</p>
-              <p><span className="font-medium">料金:</span> {services.find(s => s.id === bookingForm.service)?.price}</p>
+              <p><span className="font-medium">料金:</span> ¥{selectedService?.price?.toLocaleString()}</p>
             </div>
           </div>
           <button
@@ -237,6 +285,16 @@ function AppContent() {
             )}
           </div>
 
+          {/* エラーメッセージ */}
+          {error && (
+            <div className="mb-6 max-w-2xl mx-auto">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-2">
+                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                <span className="text-red-700 text-sm">{error}</span>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit}>
             <div className="grid lg:grid-cols-3 gap-8 mb-8">
               {/* Column 1: Service Selection */}
@@ -263,7 +321,7 @@ function AppContent() {
                     >
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-semibold text-sm text-amber-900">{service.name}</h4>
-                        <span className="text-amber-700 font-bold text-sm">{service.price}</span>
+                        <span className="text-amber-700 font-bold text-sm">¥{service.price.toLocaleString()}</span>
                       </div>
                       <p className="text-xs text-amber-600 mb-2">{service.description}</p>
                       <span className="text-xs text-stone-500 flex items-center">
@@ -388,9 +446,9 @@ function AppContent() {
                         type="email"
                         value={bookingForm.email}
                         onChange={(e) => handleInputChange('email', e.target.value)}
-                        className="w-full p-3 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        className="w-full p-3 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-stone-50"
                         placeholder="example@email.com"
-                        required
+                        disabled
                       />
                     </div>
                     
@@ -432,7 +490,7 @@ function AppContent() {
                     </div>
                     <div className="flex justify-between">
                       <span className="font-medium text-amber-800">料金:</span>
-                      <span className="text-amber-700 font-bold">{services.find(s => s.id === bookingForm.service)?.price}</span>
+                      <span className="text-amber-700 font-bold">¥{services.find(s => s.id === bookingForm.service)?.price.toLocaleString()}</span>
                     </div>
                   </div>
                   <div className="space-y-3">
@@ -463,10 +521,10 @@ function AppContent() {
               <button
                 type="submit"
                 className="bg-amber-700 text-white px-12 py-4 rounded-xl hover:bg-amber-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 mx-auto text-lg font-semibold shadow-lg"
-                disabled={!isFormComplete}
+                disabled={!isFormComplete || loading}
               >
                 <CheckCircle className="w-6 h-6" />
-                <span>{user ? '予約を確定する' : 'ログインして予約する'}</span>
+                <span>{loading ? '予約中...' : (user ? '予約を確定する' : 'ログインして予約する')}</span>
               </button>
               {!isFormComplete && (
                 <p className="text-stone-500 mt-3 text-sm">
@@ -537,13 +595,13 @@ function AppContent() {
             {services.map((service) => (
               <div key={service.id} className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow transform hover:-translate-y-1 border border-stone-200">
                 <h3 className="text-lg font-semibold text-amber-900 mb-2">{service.name}</h3>
-                <p className="text-sm text-amber-600 mb-3">{service.nameEn}</p>
+                <p className="text-sm text-amber-600 mb-3">{service.name_en}</p>
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-sm text-amber-700 flex items-center">
                     <Clock className="w-4 h-4 mr-1" />
                     {service.duration}
                   </span>
-                  <span className="text-lg font-bold text-amber-700">{service.price}</span>
+                  <span className="text-lg font-bold text-amber-700">¥{service.price.toLocaleString()}</span>
                 </div>
                 <p className="text-sm text-amber-600">{service.description}</p>
               </div>

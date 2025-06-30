@@ -21,235 +21,43 @@ import {
   Download
 } from 'lucide-react';
 import CalendarView from './CalendarView';
-
-interface Booking {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  service: string;
-  serviceName: string;
-  date: string;
-  time: string;
-  notes: string;
-  status: 'confirmed' | 'pending' | 'cancelled' | 'completed';
-  price: string;
-  createdAt: string;
-  chartNumber?: string;
-}
+import { getAllBookings, updateBooking, deleteBooking, BookingWithDetails, subscribeToBookings } from '../lib/database';
 
 interface AdminDashboardProps {
   onBackToPublic: () => void;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
+  const [filteredBookings, setFilteredBookings] = useState<BookingWithDetails[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('');
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<BookingWithDetails | null>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [currentView, setCurrentView] = useState<'dashboard' | 'calendar'>('dashboard');
+  const [loading, setLoading] = useState(true);
 
-  const services = [
-    { id: 'general', name: '一般整骨治療', price: '¥3,000' },
-    { id: 'sports', name: 'スポーツ整骨', price: '¥4,500' },
-    { id: 'massage', name: 'マッサージ治療', price: '¥5,000' },
-    { id: 'acupuncture', name: '鍼灸治療', price: '¥4,000' }
-  ];
-
-  // カルテ番号を生成する関数
-  const generateChartNumber = () => {
-    return Math.floor(Math.random() * 9000) + 1000; // 1000-9999の範囲
-  };
-
-  // サンプルデータの生成（2025年7月15日以降）
+  // 予約データを取得
   useEffect(() => {
-    const sampleBookings: Booking[] = [
-      {
-        id: '1',
-        name: '田中花子',
-        phone: '090-1234-5678',
-        email: 'tanaka@example.com',
-        service: 'general',
-        serviceName: '一般整骨治療',
-        date: '2025-07-15',
-        time: '10:00',
-        notes: '肩こりがひどく、頭痛もあります',
-        status: 'confirmed',
-        price: '¥3,000',
-        createdAt: '2025-07-10T09:00:00Z',
-        chartNumber: '1001'
-      },
-      {
-        id: '2',
-        name: '佐藤太郎',
-        phone: '080-9876-5432',
-        email: 'sato@example.com',
-        service: 'sports',
-        serviceName: 'スポーツ整骨',
-        date: '2025-07-16',
-        time: '14:30',
-        notes: 'テニスで腰を痛めました',
-        status: 'pending',
-        price: '¥4,500',
-        createdAt: '2025-07-12T14:30:00Z',
-        chartNumber: '1002'
-      },
-      {
-        id: '3',
-        name: '山田美咲',
-        phone: '070-5555-1111',
-        email: 'yamada@example.com',
-        service: 'massage',
-        serviceName: 'マッサージ治療',
-        date: '2025-07-17',
-        time: '11:00',
-        notes: 'デスクワークによる首と肩の疲労',
-        status: 'confirmed',
-        price: '¥5,000',
-        createdAt: '2025-07-11T16:20:00Z',
-        chartNumber: '1003'
-      },
-      {
-        id: '4',
-        name: '鈴木一郎',
-        phone: '090-7777-8888',
-        email: 'suzuki@example.com',
-        service: 'acupuncture',
-        serviceName: '鍼灸治療',
-        date: '2025-07-18',
-        time: '16:00',
-        notes: '慢性的な腰痛で悩んでいます',
-        status: 'confirmed',
-        price: '¥4,000',
-        createdAt: '2025-07-08T11:15:00Z',
-        chartNumber: '1004'
-      },
-      {
-        id: '5',
-        name: '高橋恵子',
-        phone: '080-3333-4444',
-        email: 'takahashi@example.com',
-        service: 'general',
-        serviceName: '一般整骨治療',
-        date: '2025-07-19',
-        time: '09:30',
-        notes: '首の痛みと手のしびれ',
-        status: 'confirmed',
-        price: '¥3,000',
-        createdAt: '2025-07-13T10:45:00Z',
-        chartNumber: '1005'
-      },
-      {
-        id: '6',
-        name: '伊藤健太',
-        phone: '090-2222-3333',
-        email: 'ito@example.com',
-        service: 'sports',
-        serviceName: 'スポーツ整骨',
-        date: '2025-07-21',
-        time: '15:00',
-        notes: 'サッカーでの膝の怪我',
-        status: 'confirmed',
-        price: '¥4,500',
-        createdAt: '2025-07-14T12:00:00Z',
-        chartNumber: '1006'
-      },
-      {
-        id: '7',
-        name: '渡辺由美',
-        phone: '080-4444-5555',
-        email: 'watanabe@example.com',
-        service: 'massage',
-        serviceName: 'マッサージ治療',
-        date: '2025-07-22',
-        time: '14:00',
-        notes: 'デスクワークによる肩こり',
-        status: 'confirmed',
-        price: '¥5,000',
-        createdAt: '2025-07-15T09:30:00Z',
-        chartNumber: '1007'
-      },
-      {
-        id: '8',
-        name: '中村雅子',
-        phone: '070-6666-7777',
-        email: 'nakamura@example.com',
-        service: 'acupuncture',
-        serviceName: '鍼灸治療',
-        date: '2025-07-23',
-        time: '10:30',
-        notes: '更年期による体調不良',
-        status: 'pending',
-        price: '¥4,000',
-        createdAt: '2025-07-16T14:20:00Z',
-        chartNumber: '1008'
-      },
-      {
-        id: '9',
-        name: '小林達也',
-        phone: '090-8888-9999',
-        email: 'kobayashi@example.com',
-        service: 'sports',
-        serviceName: 'スポーツ整骨',
-        date: '2025-07-24',
-        time: '17:00',
-        notes: 'ランニングによる足首の痛み',
-        status: 'confirmed',
-        price: '¥4,500',
-        createdAt: '2025-07-17T11:45:00Z',
-        chartNumber: '1009'
-      },
-      {
-        id: '10',
-        name: '松本香織',
-        phone: '080-1111-2222',
-        email: 'matsumoto@example.com',
-        service: 'general',
-        serviceName: '一般整骨治療',
-        date: '2025-07-25',
-        time: '15:30',
-        notes: '家事による手首の痛み',
-        status: 'confirmed',
-        price: '¥3,000',
-        createdAt: '2025-07-18T16:30:00Z',
-        chartNumber: '1010'
-      },
-      {
-        id: '11',
-        name: '森田慎一',
-        phone: '070-3333-4444',
-        email: 'morita@example.com',
-        service: 'massage',
-        serviceName: 'マッサージ治療',
-        date: '2025-07-26',
-        time: '11:30',
-        notes: '長時間運転による腰の疲労',
-        status: 'confirmed',
-        price: '¥5,000',
-        createdAt: '2025-07-19T13:15:00Z',
-        chartNumber: '1011'
-      },
-      {
-        id: '12',
-        name: '石川美穂',
-        phone: '090-5555-6666',
-        email: 'ishikawa@example.com',
-        service: 'acupuncture',
-        serviceName: '鍼灸治療',
-        date: '2025-07-28',
-        time: '09:00',
-        notes: '不眠症と肩こり',
-        status: 'pending',
-        price: '¥4,000',
-        createdAt: '2025-07-20T10:00:00Z',
-        chartNumber: '1012'
-      }
-    ];
-    setBookings(sampleBookings);
-    setFilteredBookings(sampleBookings);
+    const fetchBookings = async () => {
+      setLoading(true);
+      const bookingsData = await getAllBookings();
+      setBookings(bookingsData);
+      setFilteredBookings(bookingsData);
+      setLoading(false);
+    };
+
+    fetchBookings();
+
+    // リアルタイム更新の購読
+    const subscription = subscribeToBookings((updatedBookings) => {
+      setBookings(updatedBookings);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // フィルタリング機能
@@ -258,10 +66,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
 
     if (searchTerm) {
       filtered = filtered.filter(booking =>
-        booking.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        booking.phone.includes(searchTerm) ||
-        booking.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        booking.chartNumber?.includes(searchTerm)
+        booking.profile?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        booking.profile?.phone?.includes(searchTerm) ||
+        booking.chart_number?.includes(searchTerm)
       );
     }
 
@@ -270,29 +77,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
     }
 
     if (dateFilter) {
-      filtered = filtered.filter(booking => booking.date === dateFilter);
+      filtered = filtered.filter(booking => booking.booking_date === dateFilter);
     }
 
     setFilteredBookings(filtered);
   }, [bookings, searchTerm, statusFilter, dateFilter]);
 
-  const updateBookingStatus = (bookingId: string, newStatus: Booking['status']) => {
-    setBookings(prev => prev.map(booking =>
-      booking.id === bookingId ? { ...booking, status: newStatus } : booking
-    ));
+  const updateBookingStatus = async (bookingId: string, newStatus: BookingWithDetails['status']) => {
+    const updatedBooking = await updateBooking(bookingId, { status: newStatus });
+    if (updatedBooking) {
+      setBookings(prev => prev.map(booking =>
+        booking.id === bookingId ? { ...booking, status: newStatus } : booking
+      ));
+    }
   };
 
-  const updateBooking = (bookingId: string, updates: Partial<Booking>) => {
-    setBookings(prev => prev.map(booking =>
-      booking.id === bookingId ? { ...booking, ...updates } : booking
-    ));
+  const handleUpdateBooking = async (bookingId: string, updates: Partial<BookingWithDetails>) => {
+    const updatedBooking = await updateBooking(bookingId, updates);
+    if (updatedBooking) {
+      setBookings(prev => prev.map(booking =>
+        booking.id === bookingId ? { ...booking, ...updates } : booking
+      ));
+    }
   };
 
-  const deleteBooking = (bookingId: string) => {
-    setBookings(prev => prev.filter(booking => booking.id !== bookingId));
+  const handleDeleteBooking = async (bookingId: string) => {
+    const success = await deleteBooking(bookingId);
+    if (success) {
+      setBookings(prev => prev.filter(booking => booking.id !== bookingId));
+    }
   };
 
-  const getStatusColor = (status: Booking['status']) => {
+  const getStatusColor = (status: BookingWithDetails['status']) => {
     switch (status) {
       case 'confirmed': return 'bg-green-100 text-green-800';
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -302,7 +118,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
     }
   };
 
-  const getStatusText = (status: Booking['status']) => {
+  const getStatusText = (status: BookingWithDetails['status']) => {
     switch (status) {
       case 'confirmed': return '確定';
       case 'pending': return '保留';
@@ -317,10 +133,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
     totalBookings: bookings.length,
     confirmedBookings: bookings.filter(b => b.status === 'confirmed').length,
     pendingBookings: bookings.filter(b => b.status === 'pending').length,
-    todayBookings: bookings.filter(b => b.date === new Date().toISOString().split('T')[0]).length,
+    todayBookings: bookings.filter(b => b.booking_date === new Date().toISOString().split('T')[0]).length,
     totalRevenue: bookings
       .filter(b => b.status === 'completed')
-      .reduce((sum, b) => sum + parseInt(b.price.replace('¥', '').replace(',', '')), 0)
+      .reduce((sum, b) => sum + (b.service?.price || 0), 0)
   };
 
   const renderDashboard = () => (
@@ -381,16 +197,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
         <h3 className="text-lg font-semibold text-amber-900 mb-4">今日の予約</h3>
         <div className="space-y-3">
           {bookings
-            .filter(booking => booking.date === new Date().toISOString().split('T')[0])
-            .sort((a, b) => a.time.localeCompare(b.time))
+            .filter(booking => booking.booking_date === new Date().toISOString().split('T')[0])
+            .sort((a, b) => a.booking_time.localeCompare(b.booking_time))
             .map(booking => (
               <div key={booking.id} className="flex items-center justify-between p-3 bg-stone-50 rounded-lg">
                 <div className="flex items-center space-x-3">
-                  <div className="text-sm font-medium text-amber-900">{booking.time}</div>
-                  <div className="text-sm text-stone-600">{booking.name}</div>
-                  <div className="text-sm text-stone-500">{booking.serviceName}</div>
-                  {booking.chartNumber && (
-                    <div className="text-xs text-stone-400">#{booking.chartNumber}</div>
+                  <div className="text-sm font-medium text-amber-900">{booking.booking_time}</div>
+                  <div className="text-sm text-stone-600">{booking.profile?.name}</div>
+                  <div className="text-sm text-stone-500">{booking.service?.name}</div>
+                  {booking.chart_number && (
+                    <div className="text-xs text-stone-400">#{booking.chart_number}</div>
                   )}
                 </div>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
@@ -398,7 +214,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
                 </span>
               </div>
             ))}
-          {bookings.filter(booking => booking.date === new Date().toISOString().split('T')[0]).length === 0 && (
+          {bookings.filter(booking => booking.booking_date === new Date().toISOString().split('T')[0]).length === 0 && (
             <p className="text-stone-500 text-center py-4">今日の予約はありません</p>
           )}
         </div>
@@ -420,7 +236,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="名前、電話番号、メール、カルテ番号で検索"
+                placeholder="名前、電話番号、カルテ番号で検索"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
@@ -450,84 +266,89 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
 
         {/* 予約リスト */}
         <div className="bg-white rounded-xl shadow-lg border border-stone-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-stone-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">患者情報</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">カルテ番号</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">サービス</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">日時</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">ステータス</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">料金</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">操作</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-stone-200">
-                {filteredBookings.slice(0, 10).map((booking) => (
-                  <tr key={booking.id} className="hover:bg-stone-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-amber-900">{booking.name}</div>
-                        <div className="text-sm text-stone-500">{booking.phone}</div>
-                        <div className="text-sm text-stone-500">{booking.email}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-mono text-amber-900">#{booking.chartNumber}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-amber-900">{booking.serviceName}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-amber-900">{booking.date}</div>
-                      <div className="text-sm text-stone-500">{booking.time}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                        {getStatusText(booking.status)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-amber-900">
-                      {booking.price}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => {
-                            setSelectedBooking(booking);
-                            setShowBookingModal(true);
-                          }}
-                          className="text-amber-600 hover:text-amber-900"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => updateBookingStatus(booking.id, 'confirmed')}
-                          className="text-green-600 hover:text-green-900"
-                          disabled={booking.status === 'confirmed'}
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => updateBookingStatus(booking.id, 'cancelled')}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <XCircle className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => deleteBooking(booking.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
+          {loading ? (
+            <div className="p-8 text-center">
+              <div className="text-amber-700">読み込み中...</div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-stone-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">患者情報</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">カルテ番号</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">サービス</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">日時</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">ステータス</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">料金</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">操作</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="bg-white divide-y divide-stone-200">
+                  {filteredBookings.slice(0, 10).map((booking) => (
+                    <tr key={booking.id} className="hover:bg-stone-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <div className="text-sm font-medium text-amber-900">{booking.profile?.name}</div>
+                          <div className="text-sm text-stone-500">{booking.profile?.phone}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-mono text-amber-900">#{booking.chart_number}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-amber-900">{booking.service?.name}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-amber-900">{booking.booking_date}</div>
+                        <div className="text-sm text-stone-500">{booking.booking_time}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
+                          {getStatusText(booking.status)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-amber-900">
+                        ¥{booking.service?.price.toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => {
+                              setSelectedBooking(booking);
+                              setShowBookingModal(true);
+                            }}
+                            className="text-amber-600 hover:text-amber-900"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => updateBookingStatus(booking.id, 'confirmed')}
+                            className="text-green-600 hover:text-green-900"
+                            disabled={booking.status === 'confirmed'}
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => updateBookingStatus(booking.id, 'cancelled')}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteBooking(booking.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {filteredBookings.length > 10 && (
             <div className="bg-stone-50 px-6 py-3 text-center">
               <p className="text-sm text-stone-600">
@@ -599,7 +420,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
         {currentView === 'calendar' && (
           <CalendarView 
             bookings={bookings} 
-            onUpdateBooking={updateBooking}
+            onUpdateBooking={handleUpdateBooking}
           />
         )}
       </main>
@@ -626,19 +447,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2">
                         <User className="w-4 h-4 text-amber-700" />
-                        <span className="text-stone-700">{selectedBooking.name}</span>
+                        <span className="text-stone-700">{selectedBooking.profile?.name}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <Phone className="w-4 h-4 text-amber-700" />
-                        <span className="text-stone-700">{selectedBooking.phone}</span>
+                        <span className="text-stone-700">{selectedBooking.profile?.phone}</span>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Mail className="w-4 h-4 text-amber-700" />
-                        <span className="text-stone-700">{selectedBooking.email}</span>
-                      </div>
-                      {selectedBooking.chartNumber && (
+                      {selectedBooking.chart_number && (
                         <div className="text-stone-700">
-                          <strong>カルテ番号:</strong> #{selectedBooking.chartNumber}
+                          <strong>カルテ番号:</strong> #{selectedBooking.chart_number}
                         </div>
                       )}
                     </div>
@@ -649,17 +466,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2">
                         <Calendar className="w-4 h-4 text-amber-700" />
-                        <span className="text-stone-700">{selectedBooking.date}</span>
+                        <span className="text-stone-700">{selectedBooking.booking_date}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <Clock className="w-4 h-4 text-amber-700" />
-                        <span className="text-stone-700">{selectedBooking.time}</span>
+                        <span className="text-stone-700">{selectedBooking.booking_time}</span>
                       </div>
                       <div className="text-stone-700">
-                        <strong>サービス:</strong> {selectedBooking.serviceName}
+                        <strong>サービス:</strong> {selectedBooking.service?.name}
                       </div>
                       <div className="text-stone-700">
-                        <strong>料金:</strong> {selectedBooking.price}
+                        <strong>料金:</strong> ¥{selectedBooking.service?.price.toLocaleString()}
                       </div>
                     </div>
                   </div>

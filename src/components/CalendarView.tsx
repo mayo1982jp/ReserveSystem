@@ -8,31 +8,16 @@ import {
   FileText,
   Plus
 } from 'lucide-react';
-
-interface Booking {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  service: string;
-  serviceName: string;
-  date: string;
-  time: string;
-  notes: string;
-  status: 'confirmed' | 'pending' | 'cancelled' | 'completed';
-  price: string;
-  createdAt: string;
-  chartNumber?: string;
-}
+import { BookingWithDetails, updateBooking, checkBookingConflict } from '../lib/database';
 
 interface CalendarViewProps {
-  bookings: Booking[];
-  onUpdateBooking: (bookingId: string, updates: Partial<Booking>) => void;
+  bookings: BookingWithDetails[];
+  onUpdateBooking: (bookingId: string, updates: Partial<BookingWithDetails>) => void;
 }
 
 interface DragState {
   isDragging: boolean;
-  draggedBooking: Booking | null;
+  draggedBooking: BookingWithDetails | null;
   dragOffset: { x: number; y: number };
   originalPosition: { date: string; time: string };
 }
@@ -81,14 +66,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, onUpdateBooking }
   // 特定の日付と時間の予約を取得
   const getBookingForSlot = (date: string, time: string) => {
     return bookings.find(booking => 
-      booking.date === date && 
-      booking.time === time && 
+      booking.booking_date === date && 
+      booking.booking_time === time && 
       booking.status !== 'cancelled'
     );
   };
 
   // ドラッグ開始
-  const handleDragStart = (e: React.MouseEvent, booking: Booking) => {
+  const handleDragStart = (e: React.MouseEvent, booking: BookingWithDetails) => {
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
     setDragState({
@@ -99,8 +84,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, onUpdateBooking }
         y: e.clientY - rect.top
       },
       originalPosition: {
-        date: booking.date,
-        time: booking.time
+        date: booking.booking_date,
+        time: booking.booking_time
       }
     });
     setMousePosition({ x: e.clientX, y: e.clientY });
@@ -114,7 +99,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, onUpdateBooking }
   };
 
   // ドラッグ終了
-  const handleMouseUp = (e: MouseEvent) => {
+  const handleMouseUp = async (e: MouseEvent) => {
     if (dragState.isDragging && dragState.draggedBooking && calendarRef.current) {
       const calendarRect = calendarRef.current.getBoundingClientRect();
       const x = e.clientX - calendarRect.left;
@@ -137,11 +122,16 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, onUpdateBooking }
         const existingBooking = getBookingForSlot(newDate, newTime);
         
         if (!existingBooking || existingBooking.id === dragState.draggedBooking.id) {
-          // 予約を更新
-          onUpdateBooking(dragState.draggedBooking.id, {
-            date: newDate,
-            time: newTime
-          });
+          // 予約の重複チェック
+          const hasConflict = await checkBookingConflict(newDate, newTime, dragState.draggedBooking.id);
+          
+          if (!hasConflict) {
+            // 予約を更新
+            onUpdateBooking(dragState.draggedBooking.id, {
+              booking_date: newDate,
+              booking_time: newTime
+            });
+          }
         }
       }
     }
@@ -285,16 +275,16 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, onUpdateBooking }
                           'bg-stone-100 border border-stone-300'
                         }`}
                         onMouseDown={(e) => handleDragStart(e, booking)}
-                        title={`${booking.name} - ${booking.serviceName}`}
+                        title={`${booking.profile?.name} - ${booking.service?.name}`}
                       >
                         <div className="text-xs font-medium text-stone-800 flex items-start leading-tight">
                           <User className="w-3 h-3 mr-1 flex-shrink-0 mt-0.5" />
-                          <span className="break-words">{booking.name}</span>
+                          <span className="break-words">{booking.profile?.name}</span>
                         </div>
-                        {booking.chartNumber && (
+                        {booking.chart_number && (
                           <div className="text-xs text-stone-600 flex items-center mt-1">
                             <FileText className="w-3 h-3 mr-1 flex-shrink-0" />
-                            <span>#{booking.chartNumber}</span>
+                            <span>#{booking.chart_number}</span>
                           </div>
                         )}
                       </div>
@@ -318,12 +308,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, onUpdateBooking }
           >
             <div className="text-xs font-medium text-amber-900 flex items-start leading-tight">
               <User className="w-3 h-3 mr-1 flex-shrink-0 mt-0.5" />
-              <span className="break-words">{dragState.draggedBooking.name}</span>
+              <span className="break-words">{dragState.draggedBooking.profile?.name}</span>
             </div>
-            {dragState.draggedBooking.chartNumber && (
+            {dragState.draggedBooking.chart_number && (
               <div className="text-xs text-amber-700 flex items-center mt-1">
                 <FileText className="w-3 h-3 mr-1 flex-shrink-0" />
-                <span>#{dragState.draggedBooking.chartNumber}</span>
+                <span>#{dragState.draggedBooking.chart_number}</span>
               </div>
             )}
           </div>
