@@ -69,11 +69,21 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
           setLoading(false)
           return
         }
-        const { error } = await signUp(email, password, { name })
+        const { error } = await signUp(email, password, { name }) // dataは現状使わないのでそのまま
         if (error) {
-          setMessage({ type: 'error', text: 'アカウント作成に失敗しました。' })
+          // Supabaseのエラーメッセージは状況により変わるため、代表的なものをチェック
+          if (error.message.toLowerCase().includes('user already registered') ||
+              error.message.toLowerCase().includes('email link sign up disabled') || // Email link signupがdisabledの場合も考慮
+              (error.status === 400 && error.message.toLowerCase().includes('user already exists')) // より具体的なチェック
+          ) {
+            setMessage({ type: 'error', text: 'このメールアドレスは既に使用されているか、登録できません。別のメールアドレスをお試しください。' });
+          } else {
+            setMessage({ type: 'error', text: `アカウント作成エラー: ${error.message}` });
+          }
         } else {
-          setMessage({ type: 'success', text: 'アカウントを作成しました。確認メールを送信しましたので、メールをチェックしてアカウントを有効化してください。' })
+          // 成功時のメッセージはsignUpの挙動（即時ログインかメール確認か）に依存する
+          // 現状はメール確認を促すメッセージ
+          setMessage({ type: 'success', text: 'アカウント情報を受け付けました。確認メールを送信しましたので、メールをチェックしてアカウントを有効化してください。' });
           setTimeout(() => {
             setMode('signin')
             setMessage(null)
@@ -87,7 +97,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
           setMessage({ type: 'success', text: 'パスワードリセットメールを送信しました。' })
         }
       }
-    } catch (error) {
+    } catch { // 未使用のため 'error' 変数を削除
       setMessage({ type: 'error', text: 'エラーが発生しました。もう一度お試しください。' })
     }
 

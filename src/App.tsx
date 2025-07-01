@@ -37,6 +37,31 @@ function AppContent() {
 
   const { user, loading: authLoading } = useAuth();
 
+  // フォームの初期状態を定義
+  const initialBookingFormState = {
+    name: '',
+    phone: '',
+    email: '',
+    service: '',
+    date: '',
+    time: '',
+    notes: ''
+  };
+
+  // ユーザープロファイルに基づいてフォームを初期化または更新する関数
+  const initializeFormWithUser = async (currentUser: typeof user) => {
+    let baseForm = { ...initialBookingFormState, email: currentUser?.email || '' };
+    if (currentUser) {
+      const profile = await getProfile(currentUser.id);
+      if (profile) {
+        baseForm.name = profile.name || '';
+        baseForm.phone = profile.phone || '';
+      }
+    }
+    setBookingForm(baseForm);
+  };
+
+
   const timeSlots = [
     '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
     '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
@@ -52,30 +77,12 @@ function AppContent() {
     fetchServices();
   }, []);
 
-  // ユーザー情報を取得してフォームに設定
+  // ユーザー情報が変更された場合、フォームを初期化
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (user) {
-        const profile = await getProfile(user.id);
-        if (profile) {
-          setBookingForm(prev => ({
-            ...prev,
-            name: profile.name || '',
-            phone: profile.phone || '',
-            email: user.email || ''
-          }));
-        } else {
-          // プロフィールが存在しない場合、メールアドレスのみ設定
-          setBookingForm(prev => ({
-            ...prev,
-            email: user.email || ''
-          }));
-        }
-      }
-    };
-
     if (user) {
-      fetchUserProfile();
+      initializeFormWithUser(user);
+    } else {
+      setBookingForm(initialBookingFormState); // ログアウト時などは完全に初期化
     }
   }, [user]);
 
@@ -93,8 +100,8 @@ function AppContent() {
       return;
     }
 
+    setError(null); // エラーメッセージをクリア
     setLoading(true);
-    setError(null);
 
     try {
       // 予約の重複チェック
@@ -124,11 +131,18 @@ function AppContent() {
       if (booking) {
         setIsSubmitted(true);
       } else {
-        setError('予約の作成に失敗しました。もう一度お試しください。');
+        // createBookingがnullを返すがエラーをスローしない場合（例：ユーザー未認証で内部的にnullを返すなど）
+        setError('予約の作成に失敗しました。入力内容をご確認の上、もう一度お試しください。');
       }
-    } catch (error) {
-      console.error('Booking error:', error);
-      setError('予約の作成中にエラーが発生しました。');
+    } catch (err) { // error を err に変更
+      console.error('Booking process error:', err);
+      if (err instanceof Error && err.message === '予約の空き状況確認中にエラーが発生しました。') {
+        setError('予約の空き状況の確認中にエラーが発生しました。しばらくしてからもう一度お試しください。');
+      } else if (err instanceof Error) {
+        setError(`予約処理中にエラーが発生しました: ${err.message}`);
+      } else {
+        setError('予約の作成中に予期せぬエラーが発生しました。');
+      }
     }
 
     setLoading(false);
@@ -189,7 +203,14 @@ function AppContent() {
             </div>
           </div>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              setIsSubmitted(false); // フォーム表示に戻る
+              if (user) {
+                initializeFormWithUser(user); // ユーザー情報に基づいてフォームを再初期化
+              } else {
+                setBookingForm(initialBookingFormState); // ユーザーがいなければ完全に初期化
+              }
+            }}
             className="bg-amber-700 text-white px-6 py-3 rounded-lg hover:bg-amber-800 transition-colors w-full"
           >
             新しい予約をする

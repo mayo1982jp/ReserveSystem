@@ -1,14 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Calendar, 
-  ChevronLeft, 
-  ChevronRight, 
-  Clock,
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import {
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
   User,
-  FileText,
-  Plus
+  FileText
 } from 'lucide-react';
-import { BookingWithDetails, updateBooking, checkBookingConflict } from '../lib/database';
+import { BookingWithDetails, checkBookingConflict } from '../lib/database';
 
 interface CalendarViewProps {
   bookings: BookingWithDetails[];
@@ -33,30 +31,30 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, onUpdateBooking }
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const calendarRef = useRef<HTMLDivElement>(null);
 
-  // 時間スロット（30分間隔）
-  const timeSlots = [
+  // 時間スロット（30分間隔）を useMemo でメモ化
+  const timeSlots = useMemo(() => [
     '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
     '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
     '17:00', '17:30', '18:00', '18:30'
-  ];
+  ], []);
 
   // 週の日付を取得
-  const getWeekDates = (date: Date) => {
-    const week = [];
+  const getWeekDates = useCallback((date: Date) => {
+    const week: Date[] = [];
     const startOfWeek = new Date(date);
     const day = startOfWeek.getDay();
     const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); // 月曜日を週の始まりに
     startOfWeek.setDate(diff);
 
     for (let i = 0; i < 7; i++) {
-      const currentDate = new Date(startOfWeek);
-      currentDate.setDate(startOfWeek.getDate() + i);
-      week.push(currentDate);
+      const d = new Date(startOfWeek); // ループ内で新しいDateオブジェクトを作成
+      d.setDate(startOfWeek.getDate() + i);
+      week.push(d);
     }
     return week;
-  };
+  }, []); // 依存配列は空でOK (date引数にのみ依存するため)
 
-  const weekDates = getWeekDates(currentDate);
+  const weekDates = getWeekDates(currentDate); // currentDateが変更されるたびに再計算
 
   // 日付フォーマット
   const formatDate = (date: Date) => {
@@ -64,16 +62,16 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, onUpdateBooking }
   };
 
   // 特定の日付と時間の予約を取得
-  const getBookingForSlot = (date: string, time: string) => {
-    return bookings.find(booking => 
-      booking.booking_date === date && 
-      booking.booking_time === time && 
+  const getBookingForSlot = useCallback((date: string, time: string) => {
+    return bookings.find(booking =>
+      booking.booking_date === date &&
+      booking.booking_time === time &&
       booking.status !== 'cancelled'
     );
-  };
+  }, [bookings]);
 
   // ドラッグ開始
-  const handleDragStart = (e: React.MouseEvent, booking: BookingWithDetails) => {
+  const handleDragStart = useCallback((e: React.MouseEvent, booking: BookingWithDetails) => {
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
     setDragState({
@@ -89,60 +87,74 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, onUpdateBooking }
       }
     });
     setMousePosition({ x: e.clientX, y: e.clientY });
-  };
+  }, []); // 依存配列は空
 
   // ドラッグ中
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (dragState.isDragging) {
       setMousePosition({ x: e.clientX, y: e.clientY });
     }
-  };
+  }, [dragState.isDragging]);
 
   // ドラッグ終了
-  const handleMouseUp = async (e: MouseEvent) => {
+  const handleMouseUp = useCallback(async (e: MouseEvent) => {
     if (dragState.isDragging && dragState.draggedBooking && calendarRef.current) {
       const calendarRect = calendarRef.current.getBoundingClientRect();
-      const x = e.clientX - calendarRect.left;
-      const y = e.clientY - calendarRect.top;
+      const xPos = e.clientX - calendarRect.left;
+      const yPos = e.clientY - calendarRect.top;
 
-      // どのセルにドロップされたかを計算
-      const headerHeight = 60; // ヘッダーの高さ
-      const dayColumnWidth = 120; // 曜日列の幅
+      const headerHeight = 60;
+      const dayColumnWidth = 120;
       const cellWidth = (calendarRect.width - dayColumnWidth) / timeSlots.length;
-      const cellHeight = 80; // 各日の行の高さ
+      const cellHeight = 80;
 
-      const timeIndex = Math.floor((x - dayColumnWidth) / cellWidth);
-      const dayIndex = Math.floor((y - headerHeight) / cellHeight);
+      const droppedTimeIndex = Math.floor((xPos - dayColumnWidth) / cellWidth);
+      const droppedDayIndex = Math.floor((yPos - headerHeight) / cellHeight);
 
-      if (timeIndex >= 0 && timeIndex < timeSlots.length && dayIndex >= 0 && dayIndex < 7) {
-        const newDate = formatDate(weekDates[dayIndex]);
-        const newTime = timeSlots[timeIndex];
+      // getWeekDatesを呼び出して最新の週の日付を取得
+      const currentWeekDates = getWeekDates(currentDate);
 
-        // 既に予約があるかチェック
-        const existingBooking = getBookingForSlot(newDate, newTime);
-        
-        if (!existingBooking || existingBooking.id === dragState.draggedBooking.id) {
-          // 予約の重複チェック
-          const hasConflict = await checkBookingConflict(newDate, newTime, dragState.draggedBooking.id);
-          
-          if (!hasConflict) {
-            // 予約を更新
-            onUpdateBooking(dragState.draggedBooking.id, {
-              booking_date: newDate,
-              booking_time: newTime
-            });
+      if (droppedTimeIndex >= 0 && droppedTimeIndex < timeSlots.length && droppedDayIndex >= 0 && droppedDayIndex < currentWeekDates.length) {
+        const newDate = formatDate(currentWeekDates[droppedDayIndex]);
+        const newTime = timeSlots[droppedTimeIndex];
+
+        // 移動元と移動先が同じ場合は何もしない
+        if (newDate === dragState.draggedBooking.booking_date && newTime === dragState.draggedBooking.booking_time) {
+          // 位置が変わらないので、特別な処理は不要 (setDragStateは最後に呼ばれる)
+        } else {
+          const existingBooking = getBookingForSlot(newDate, newTime);
+
+          if (existingBooking && existingBooking.id !== dragState.draggedBooking.id) {
+            alert('移動先の時間には既に別の予約が存在します。');
+          } else {
+            try {
+              const hasConflict = await checkBookingConflict(newDate, newTime, dragState.draggedBooking.id);
+              if (hasConflict) {
+                alert('選択された日時は他の予約と競合しています。別の時間をお選びください。');
+              } else {
+                // 競合がない場合のみ予約を更新
+                onUpdateBooking(dragState.draggedBooking.id, {
+                  booking_date: newDate,
+                  booking_time: newTime
+                });
+              }
+            } catch (error) {
+              console.error("Error checking booking conflict or updating booking:", error);
+              alert('予約の移動中にエラーが発生しました。');
+            }
           }
         }
       }
     }
 
-    setDragState({
+    setDragState({ // ドラッグ状態をリセット
       isDragging: false,
       draggedBooking: null,
       dragOffset: { x: 0, y: 0 },
       originalPosition: { date: '', time: '' }
     });
-  };
+  }, [dragState.isDragging, dragState.draggedBooking, getBookingForSlot, onUpdateBooking, timeSlots, currentDate, getWeekDates]);
+
 
   // マウスイベントリスナーの設定
   useEffect(() => {
@@ -154,7 +166,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, onUpdateBooking }
         document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [dragState.isDragging]);
+  }, [dragState.isDragging, handleMouseMove, handleMouseUp]); // 依存配列に handleMouseMove と handleMouseUp を追加
 
   // 週を移動
   const navigateWeek = (direction: 'prev' | 'next') => {
@@ -220,7 +232,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, onUpdateBooking }
             <Calendar className="w-4 h-4 text-stone-500 mr-2" />
             <span className="text-sm font-medium text-stone-700">曜日/時間</span>
           </div>
-          {timeSlots.map((time, index) => (
+          {timeSlots.map((time) => ( // indexを削除
             <div
               key={time}
               className="flex-1 px-1 py-3 text-center border-r border-stone-200 bg-stone-50"
@@ -253,9 +265,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({ bookings, onUpdateBooking }
               </div>
               
               {/* 各時間のセル */}
-              {timeSlots.map((time, timeIndex) => {
+              {timeSlots.map((time) => { // timeIndexを削除
                 const booking = getBookingForSlot(dateStr, time);
-                const isBeingDragged = dragState.isDragging && 
+                const isBeingDragged = dragState.isDragging &&
                   dragState.draggedBooking?.id === booking?.id;
 
                 return (

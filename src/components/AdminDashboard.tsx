@@ -2,26 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { 
   Calendar, 
   Clock, 
-  User, 
-  Phone, 
-  Mail, 
-  Search, 
-  Filter, 
-  Edit3, 
-  Trash2, 
-  CheckCircle, 
-  XCircle, 
-  Plus,
+  User,
+  Phone,
+  Search,
+  Trash2,
+  CheckCircle,
+  XCircle,
   BarChart3,
-  Users,
   CalendarDays,
   DollarSign,
   AlertCircle,
   Eye,
   Download
 } from 'lucide-react';
-import CalendarView from './CalendarView';
+import CalendarView from './CalendarView'; // CalendarView のインポートを確認
 import { getAllBookings, updateBooking, deleteBooking, BookingWithDetails, subscribeToBookings } from '../lib/database';
+import { useMemo } from 'react'; // useMemo をインポート
 
 interface AdminDashboardProps {
   onBackToPublic: () => void;
@@ -37,6 +33,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [currentView, setCurrentView] = useState<'dashboard' | 'calendar'>('dashboard');
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1); // 現在のページ番号
+  const itemsPerPage = 10; // 1ページあたりの表示件数
 
   // 予約データを取得
   useEffect(() => {
@@ -128,16 +126,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
     }
   };
 
-  // 統計データの計算
-  const stats = {
-    totalBookings: bookings.length,
-    confirmedBookings: bookings.filter(b => b.status === 'confirmed').length,
-    pendingBookings: bookings.filter(b => b.status === 'pending').length,
-    todayBookings: bookings.filter(b => b.booking_date === new Date().toISOString().split('T')[0]).length,
-    totalRevenue: bookings
-      .filter(b => b.status === 'completed')
-      .reduce((sum, b) => sum + (b.service?.price || 0), 0)
-  };
+  // 統計データの計算 (useMemoでメモ化)
+  const stats = useMemo(() => {
+    return {
+      totalBookings: bookings.length,
+      confirmedBookings: bookings.filter(b => b.status === 'confirmed').length,
+      pendingBookings: bookings.filter(b => b.status === 'pending').length,
+      todayBookings: bookings.filter(b => b.booking_date === new Date().toISOString().split('T')[0]).length,
+      totalRevenue: bookings
+        .filter(b => b.status === 'completed')
+        .reduce((sum, b) => sum + (b.service?.price || 0), 0)
+    };
+  }, [bookings]); // bookings が変更された時のみ再計算
 
   const renderDashboard = () => (
     <div className="space-y-6">
@@ -285,10 +285,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-stone-200">
-                  {filteredBookings.slice(0, 10).map((booking) => (
-                    <tr key={booking.id} className="hover:bg-stone-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
+                  {filteredBookings
+                    .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                    .map((booking) => (
+                      <tr key={booking.id} className="hover:bg-stone-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
                           <div className="text-sm font-medium text-amber-900">{booking.profile?.name}</div>
                           <div className="text-sm text-stone-500">{booking.profile?.phone}</div>
                         </div>
@@ -349,11 +351,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToPublic }) => {
               </table>
             </div>
           )}
-          {filteredBookings.length > 10 && (
-            <div className="bg-stone-50 px-6 py-3 text-center">
-              <p className="text-sm text-stone-600">
-                {filteredBookings.length - 10}件の予約が他にあります
-              </p>
+          {/* ページネーションコントロール */}
+          {filteredBookings.length > itemsPerPage && (
+            <div className="bg-stone-50 px-6 py-3 flex items-center justify-between border-t border-stone-200">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                前へ
+              </button>
+              <span className="text-sm text-stone-700">
+                ページ {currentPage} / {Math.ceil(filteredBookings.length / itemsPerPage)}
+              </span>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(filteredBookings.length / itemsPerPage)))}
+                disabled={currentPage === Math.ceil(filteredBookings.length / itemsPerPage)}
+                className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                次へ
+              </button>
             </div>
           )}
         </div>
