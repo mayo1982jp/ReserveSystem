@@ -236,11 +236,11 @@ export const checkBookingConflict = async (
   const { data, error } = await query
 
   if (error) {
-    console.error('Error checking booking conflict:', error)
-    return true // エラーの場合は安全のため競合ありとする
+    console.error('Error checking booking conflict:', error);
+    throw new Error('予約の空き状況確認中にエラーが発生しました。'); // エラーをスローする
   }
 
-  return (data?.length || 0) > 0
+  return (data?.length || 0) > 0;
 }
 
 // リアルタイム更新の購読
